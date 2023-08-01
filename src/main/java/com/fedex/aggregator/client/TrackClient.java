@@ -1,13 +1,14 @@
 package com.fedex.aggregator.client;
 
-import com.fedex.aggregator.model.AggregationProperties;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
 
@@ -17,27 +18,27 @@ import static java.util.stream.Collectors.toMap;
 
 @Service
 public class TrackClient {
-
     private final WebClient client;
-    @Autowired
-    private AggregationProperties aggregationProperties;
 
-    public TrackClient() {
+    @Value("${timeout}")
+    private Duration timeout;
+
+    public TrackClient(@Value("${track-url}") String trackUrl) {
         this.client = WebClient.builder()
-                .baseUrl(aggregationProperties.getTrackUrl())
+                .baseUrl(trackUrl)
                 .build();
     }
 
-    public Mono<Map<String, Optional<String>>> getTrack(Optional<List<String>> ids) {
-        return ids.map(l -> this.client
+    public Mono<Map<String, Optional<String>>> getTrack(List<String> ids) {
+        System.out.println(getClass() + " thread = " + Thread.currentThread().getName());
+        return client
                 .get()
-                .uri("{q}", l.stream().sorted().collect(joining(",")))
+                .uri("?q={ids}", ids.stream().collect(joining(",")))
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<Map<String, Optional<String>>>() {
-                })
-                .timeout(aggregationProperties.getTimeout())
+                }).log()
+                .timeout(timeout)
                 .onErrorReturn(e -> e instanceof WebClientResponseException || e instanceof TimeoutException,
-                        l.stream().collect(toMap(identity(), v -> Optional.empty(), (id1, id2)->id1, TreeMap::new))))
-                .orElse(Mono.just(Collections.emptyMap()));
+                        ids.stream().collect(toMap(identity(), v -> Optional.empty(), (a, b) -> a)));
     }
 }

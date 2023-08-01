@@ -11,10 +11,17 @@ import java.util.Optional;
 
 @Data
 @ToString
-@NoArgsConstructor
-@AllArgsConstructor(staticName = "create")
+//@AllArgsConstructor(staticName = "create")
 public class AggregateResult {
-    private Map<String, Optional<String>> pricing;
+
+    public AggregateResult(Map<String, Optional<Float>> pricing, Map<String, Optional<String>> track, Map<String, Optional<List<String>>> shipments) {
+        this.pricing = pricing;
+        this.track = track;
+        this.shipments = shipments;
+        System.out.println("Aggregate");
+    }
+
+    private Map<String, Optional<Float>> pricing;
     private Map<String, Optional<String>> track;
     private Map<String, Optional<List<String>>> shipments;
 }

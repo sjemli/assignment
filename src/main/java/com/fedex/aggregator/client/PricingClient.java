@@ -1,13 +1,13 @@
 package com.fedex.aggregator.client;
 
-import com.fedex.aggregator.model.AggregationProperties;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
 
@@ -19,25 +19,29 @@ import static java.util.stream.Collectors.toMap;
 public class PricingClient {
 
     private final WebClient client;
-    @Autowired
-    private AggregationProperties aggregationProperties;
+    @Value("${timeout}")
+    private Duration timeout;
 
-    public PricingClient() {
+    public PricingClient(@Value("${pricing-url}") String pricingUrl) {
         this.client = WebClient.builder()
-                .baseUrl(aggregationProperties.getPricingUrl())
+                .baseUrl(pricingUrl)
                 .build();
     }
 
-    public Mono<Map<String, Optional<String>>> getPricing(Optional<List<String>> ids) {
-        return ids.map(l -> this.client
-                        .get()
-                        .uri("{q}", l.stream().sorted().collect(joining(",")))
-                        .retrieve()
-                        .bodyToMono(new ParameterizedTypeReference<Map<String, Optional<String>>>() {
-                        })
-                        .timeout(aggregationProperties.getTimeout())
-                        .onErrorReturn(e -> e instanceof WebClientResponseException || e instanceof TimeoutException,
-                                l.stream().collect(toMap(identity(), v -> Optional.empty(), (id1, id2)->id1, TreeMap::new))))
-                .orElse(Mono.just(Collections.emptyMap()));
+    public Mono<Map<String, Optional<Float>>> getPricing(List<String> ids) {
+        System.out.println(getClass() + " thread = " + Thread.currentThread().getName());
+        return client
+                .get()
+                .uri("?q={ids}", ids.stream().collect(joining(",")))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Optional<Float>>>() {
+                })
+                .timeout(timeout)
+                .log()
+                .onErrorReturn(e -> e instanceof WebClientResponseException || e instanceof TimeoutException,
+                        ids.stream().collect(toMap(identity(),
+                                v -> Optional.empty(),
+                                (id1, id2) -> id1,
+                                TreeMap::new)));
     }
 }

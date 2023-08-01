@@ -1,13 +1,14 @@
 package com.fedex.aggregator.client;
 
-import com.fedex.aggregator.model.AggregationProperties;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
 
@@ -19,25 +20,25 @@ import static java.util.stream.Collectors.toMap;
 public class ShipmentsClient {
 
     private final WebClient client;
-    @Autowired
-    private AggregationProperties aggregationProperties;
+    @Value("${timeout}")
+    private Duration timeout;
 
-    public ShipmentsClient() {
+    public ShipmentsClient(@Value("${shipments-url}") String shipmentsUrl) {
         this.client = WebClient.builder()
-                .baseUrl(aggregationProperties.getShipmentsUrl())
+                .baseUrl(shipmentsUrl)
                 .build();
     }
 
-    public Mono<Map<String, Optional<List<String>>>> getShipment(Optional<List<String>> ids) {
-        return ids.map(l -> this.client
-                        .get()
-                        .uri("{q}", l.stream().sorted().collect(joining(",")))
-                        .retrieve()
-                        .bodyToMono(new ParameterizedTypeReference<Map<String, Optional<List<String>>>>() {
-                        })
-                        .timeout(aggregationProperties.getTimeout())
-                        .onErrorReturn(e -> e instanceof WebClientResponseException || e instanceof TimeoutException,
-                                l.stream().collect(toMap(identity(), v -> Optional.empty(), (id1, id2)-> id1, TreeMap::new))))
-                .orElse(Mono.just(Collections.emptyMap()));
+    public Mono<Map<String, Optional<List<String>>>> getShipment(List<String> ids) {
+        System.out.println(getClass() + " thread = " + Thread.currentThread().getName());
+        return client
+                .get()
+                .uri("?q={ids}", ids.stream().sorted().collect(joining(",")))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Optional<List<String>>>>() {
+                }).log()
+                .timeout(timeout)
+                .onErrorReturn(e -> e instanceof WebClientResponseException || e instanceof TimeoutException,
+                        ids.stream().collect(toMap(identity(), v -> Optional.empty(), (a, b) -> a)));
     }
 }
