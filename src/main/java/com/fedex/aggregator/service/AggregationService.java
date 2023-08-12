@@ -3,7 +3,7 @@ package com.fedex.aggregator.service;
 import com.fedex.aggregator.client.CustomClient;
 import com.fedex.aggregator.model.AggregateResult;
 import jakarta.annotation.PostConstruct;
-import org.reactivestreams.Publisher;
+import lombok.extern.java.Log;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -11,7 +11,6 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoSink;
 import reactor.core.publisher.Sinks;
 import reactor.core.publisher.Sinks.Many;
-import reactor.util.concurrent.Queues;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -23,10 +22,13 @@ import java.util.function.Function;
 import static java.time.temporal.ChronoUnit.SECONDS;
 import static java.util.function.Predicate.not;
 import static java.util.stream.Collectors.toMap;
+import static reactor.util.concurrent.Queues.SMALL_BUFFER_SIZE;
 
 @Service
+@Log
 public class AggregationService {
 
+    //For Sink thread-safety
     private static final Sinks.EmitFailureHandler HANDLER = (signalType, emission) -> true;
     private static final int BUFFER_MAX_SIZE = 5;
     private static final Duration BUFFER_TIMEOUT = Duration.of(5, SECONDS);
@@ -46,33 +48,36 @@ public class AggregationService {
     private Flux<Map<String, Optional<String>>> trackFlux;
     private Flux<Map<String, Optional<List<String>>>> shipmentsFlux;
 
+    public AggregationService() {
+        pricingSink = Sinks.many().multicast().onBackpressureBuffer(SMALL_BUFFER_SIZE, false);
+        trackSink = Sinks.many().multicast().onBackpressureBuffer(SMALL_BUFFER_SIZE, false);
+        shipmentsSink = Sinks.many().multicast().onBackpressureBuffer(SMALL_BUFFER_SIZE, false);
+    }
+
     @PostConstruct
     public void setUp() {
         pricingFlux = getFlux(pricingSink, pricingClient::getResult);
         trackFlux = getFlux(trackSink, trackClient::getResult);
         shipmentsFlux = getFlux(shipmentsSink, shipmentsClient::getResult);
+        pricingFlux.subscribe();
+        trackFlux.subscribe();
+        shipmentsFlux.subscribe();
     }
 
     private <T> Flux<Map<String, Optional<T>>> getFlux(
             Many<List<String>> sink,
-            Function<List<String>, Publisher<? extends Map<String, Optional<T>>>> getResult) {
-        return sink.asFlux().flatMapIterable(Function.identity())
+            Function<List<String>, Mono<Map<String, Optional<T>>>> getResult) {
+        return sink.asFlux().log().flatMapIterable(Function.identity())
                 .bufferTimeout(BUFFER_MAX_SIZE, BUFFER_TIMEOUT)
                 .flatMap(getResult)
                 .share();
-    }
-
-    public AggregationService() {
-        pricingSink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
-        trackSink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
-        shipmentsSink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
     }
 
     public Mono<AggregateResult> aggregate(Optional<List<String>> pricing,
                                            Optional<List<String>> track,
                                            Optional<List<String>> shipments) {
 
-
+        log.warning("pricing = " + pricing);
         Mono<Map<String, Optional<Double>>> pricingMono =
                 Mono.create(monoSink -> create(monoSink, pricingFlux, pricing));
 

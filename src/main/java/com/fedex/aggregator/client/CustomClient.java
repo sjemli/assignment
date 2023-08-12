@@ -1,6 +1,7 @@
 package com.fedex.aggregator.client;
 
 import lombok.AllArgsConstructor;
+import lombok.extern.java.Log;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -19,12 +20,14 @@ import static java.util.stream.Collectors.toMap;
 
 
 @AllArgsConstructor
+@Log
 public class CustomClient<T> {
 
     private final WebClient client;
     private Duration timeout;
 
     public Mono<Map<String, Optional<T>>> getResult(List<String> ids) {
+       log.warning("ids = " + ids);
         return client
                 .get()
                 .uri("?q={ids}", ids.stream().sorted().collect(joining(",")))
