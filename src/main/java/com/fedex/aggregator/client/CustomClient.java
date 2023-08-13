@@ -23,12 +23,12 @@ import static java.util.stream.Collectors.toMap;
 @Log
 public class CustomClient<T> {
 
-    private final WebClient client;
+    private final WebClient webClient;
     private Duration timeout;
 
     public Mono<Map<String, Optional<T>>> getResult(List<String> ids) {
-       log.warning("ids = " + ids);
-        return client
+       log.warning("ids = " + ids + " thread = " + Thread.currentThread().getName());
+        return webClient
                 .get()
                 .uri("?q={ids}", ids.stream().sorted().collect(joining(",")))
                 .retrieve()
@@ -36,9 +36,6 @@ public class CustomClient<T> {
                 })
                 .timeout(timeout)
                 .onErrorReturn(e -> e instanceof WebClientResponseException || e instanceof TimeoutException,
-                        ids.stream().collect(toMap(identity(),
-                                v -> Optional.empty(),
-                                (id1, id2) -> id1,
-                                TreeMap::new)));
+                        ids.stream().distinct().collect(toMap(identity(), v -> Optional.empty())));
     }
 }

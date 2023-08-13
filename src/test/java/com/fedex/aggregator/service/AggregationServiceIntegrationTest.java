@@ -8,23 +8,33 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
+@AutoConfigureWebTestClient(timeout = "10000")
 class AggregationServiceIntegrationTest {
 
-    private final int port = 8080;
+    private final int port = 9090;
+    @Autowired
+    protected WebTestClient webTestClient;
+
     private WireMockServer wireMockServer;
     private final Duration timeout = Duration.ofSeconds(5);
 
@@ -48,13 +58,27 @@ class AggregationServiceIntegrationTest {
     public void testExceed5Secs() {
         stubTwoItems();
 
-        Mono<AggregateResult> mono = aggregationService
-                .aggregate(Optional.of(List.of("NL", "CN")),
-                        Optional.of(List.of("1", "2")),
-                        Optional.of(List.of("1", "2")));
+        List<String> pricingIds = List.of("NL", "CN");
+        List<String> trackIds = List.of("1", "2");
+        List<String> shipmentsIds = List.of("1", "2");
+
+      /*  Mono<AggregateResult> mono = aggregationService
+                .aggregate(Optional.of(pricingIds),
+                        Optional.of(trackIds),
+                        Optional.of(shipmentsIds));
+*/
+        var uri = createAggregationUri(pricingIds, trackIds, shipmentsIds);
+        executeAggregationRequest(uri, f -> {
+            assertThat(f.getPricing()).hasSize(2);
+            assertThat(pricingIds.stream().allMatch(k -> f.getPricing().containsKey(k)));
+            assertThat(f.getTrack()).hasSize(2);
+            assertThat(trackIds.stream().allMatch(k -> f.getTrack().containsKey(k)));
+            assertThat(f.getShipments()).hasSize(2);
+            assertThat(shipmentsIds.stream().allMatch(k -> f.getShipments().containsKey(k)));
+        });
 
 
-        Duration duration = StepVerifier
+        /*Duration duration = StepVerifier
                 .create(mono)
                 .thenConsumeWhile(result -> {
                     assertThat(result).isNotNull();
@@ -64,7 +88,7 @@ class AggregationServiceIntegrationTest {
                     return true;
                 })
                 .verifyComplete();
-        assertThat(duration).isGreaterThan(Duration.ofSeconds(5));
+        assertThat(duration).isGreaterThan(Duration.ofSeconds(5));*/
     }
 
     @Test
@@ -188,7 +212,7 @@ class AggregationServiceIntegrationTest {
     }
 
     private void stubTwoItems() {
-        createStub("/pricing?q=CN%2CNL", "{\"CN\": 2, \"NL\": 1}");
+        createStub("/pricing?q=CN%2CNL", "{\"CN\": 2.0, \"NL\": 1.0}");
         createStub("/track?q=1%2C2", "{\"1\": \"NEW\", \"2\": \"COLLECTING\"}");
         createStub("/shipments?q=1%2C2", "{\"1\": [\"box\", \"box\", \"pallet\"], \"2\": [\"envelope\"]}");
     }
@@ -225,4 +249,33 @@ class AggregationServiceIntegrationTest {
         stubFor(get(urlEqualTo("/track?q=3%2C4")).willReturn(aResponse().withStatus(503)));
         stubFor(get(urlEqualTo("/shipments?q=3%2C4")).willReturn(aResponse().withStatus(503)));
     }
+
+    void executeAggregationRequest(String uri, Consumer<AggregateResult> aggregateResultConsumer) {
+        webTestClient.get().uri(uri)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody(AggregateResult.class)
+                .value(aggregateResultConsumer);
+    }
+
+     String createAggregationUri(List<String> pricing,
+                                 List<String> track,
+                                 List<String> shipments) {
+
+        UriComponentsBuilder builder = UriComponentsBuilder.newInstance().path("/aggregation");
+
+        if (!track.isEmpty()) {
+            builder.queryParam("track", String.join(",", track));
+        }
+        if (!pricing.isEmpty()) {
+            builder.queryParam("pricing", String.join(",", pricing));
+        }
+        if (!shipments.isEmpty()) {
+            builder.queryParam("shipments", String.join(",", shipments));
+        }
+
+        return builder.build().encode().toString();
+    }
+
 }

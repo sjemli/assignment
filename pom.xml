@@ -9,7 +9,7 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.fedex</groupId>
-	<artifactId>assignment</artifactId>
+	<artifactId>aggregator</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>aggregator</name>
 	<description>API aggregation service</description>

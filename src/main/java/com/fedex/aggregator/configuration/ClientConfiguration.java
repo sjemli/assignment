@@ -30,9 +30,9 @@ public class ClientConfiguration {
     }
 
     private <T> CustomClient<T> createClient(String url) {
-        var client = WebClient.builder()
+        var webClient = WebClient.builder()
                 .baseUrl(url)
                 .build();
-        return new CustomClient<>(client, timeout);
+        return new CustomClient<>(webClient, timeout);
     }
 }
