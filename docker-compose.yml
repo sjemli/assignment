@@ -1,0 +1,26 @@
+version: "3"
+services:
+  backend:
+    image: xyzassessment/backend-services:latest
+    container_name: backend
+    restart: always
+    ports:
+      - 9090:8080
+    networks:
+      - assignment
+
+  aggregation:
+    image: aggregation-service
+    container_name: aggregation
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - assignment
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - 8080:8080
+
+networks:
+  assignment:

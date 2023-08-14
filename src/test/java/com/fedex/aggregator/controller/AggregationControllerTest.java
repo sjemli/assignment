@@ -6,21 +6,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Consumer;
 
+import static com.fedex.aggregator.utils.TestingUtil.assertResponse;
+import static com.fedex.aggregator.utils.TestingUtil.executeAggregationRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@WebFluxTest(AggregationController.class)
+@WebFluxTest
 class AggregationControllerTest {
 
     @Autowired
@@ -31,55 +31,36 @@ class AggregationControllerTest {
 
 
     @Test
-    void test() {
-        List<String> pricingIds = List.of("NL", "CN");
-        List<String> trackIds = List.of("1", "2");
-        List<String> shipmentsIds = List.of("1", "2");
+    void shouldReturnValidAggregateResponseWhenAggregationControllerIsCalled() {
+        //Given
+        Map<String, Optional<Double>> pricingResult = Map.of("NL", Optional.of(14.242090605778),
+                "CN", Optional.of(20.503467806384));
+
+        Map<String, Optional<String>> trackResult = Map.of("109347263", Optional.empty(),
+                "123456891", Optional.of("COLLECTING"));
+
+        Map<String, Optional<List<String>>> shipmentsResult =
+                Map.of("109347263", Optional.of(List.of("box", "box", "pallet")),
+                        "123456891", Optional.empty());
+
+        List<String> pricingIds = new ArrayList<>(pricingResult.keySet());
+        List<String> trackIds = new ArrayList<>(trackResult.keySet());
+        List<String> shipmentsIds = new ArrayList<>(shipmentsResult.keySet());
 
         when(aggregationService.aggregate(Optional.of(pricingIds), Optional.of(trackIds), Optional.of(shipmentsIds)))
-                .thenReturn(Mono.just(AggregateResult.create(Map.of(), Map.of(), Map.of())));
+                .thenReturn(Mono.just(AggregateResult.create(pricingResult, trackResult, shipmentsResult)));
+        //When
+        var response = executeAggregationRequest(webTestClient, pricingIds, trackIds, shipmentsIds);
 
-        var uri = createAggregationUri(pricingIds, List.of("1", "2"), List.of("1", "2"));
-        executeAggregationRequest(uri, f -> {
-            assertThat(f.getPricing()).hasSize(2);
-            assertThat(pricingIds.stream().allMatch(k -> f.getPricing().containsKey(k)));
-            assertThat(f.getTrack()).hasSize(2);
-            assertThat(pricingIds.stream().allMatch(k -> f.getTrack().containsKey(k)));
-            assertThat(f.getShipments()).hasSize(2);
-            assertThat(pricingIds.stream().allMatch(k -> f.getShipments().containsKey(k)));
+        //Then
+        assertResponse(response, result -> {
+            assertThat(result.getPricing()).isEqualTo(pricingResult);
+            assertThat(result.getTrack()).isEqualTo(trackResult);
+            assertThat(result.getShipments()).isEqualTo(shipmentsResult);
         });
 
         verify(aggregationService).aggregate(Optional.of(pricingIds),
-                                             Optional.of(trackIds),
-                                             Optional.of(shipmentsIds));
+                Optional.of(trackIds),
+                Optional.of(shipmentsIds));
     }
-
-    void executeAggregationRequest(String uri, Consumer<AggregateResult> aggregateResultConsumer) {
-        webTestClient.get().uri(uri)
-                .exchange()
-                .expectStatus().isOk()
-                .expectHeader().contentType(MediaType.APPLICATION_JSON)
-                .expectBody(AggregateResult.class)
-                .value(aggregateResultConsumer);
-    }
-
-    String createAggregationUri(List<String> pricing,
-                                List<String> track,
-                                List<String> shipments) {
-
-        UriComponentsBuilder builder = UriComponentsBuilder.newInstance().path("/aggregation");
-
-        if (!track.isEmpty()) {
-            builder.queryParam("track", String.join(",", track));
-        }
-        if (!pricing.isEmpty()) {
-            builder.queryParam("pricing", String.join(",", pricing));
-        }
-        if (!shipments.isEmpty()) {
-            builder.queryParam("shipments", String.join(",", shipments));
-        }
-
-        return builder.build().encode().toString();
-    }
-
 }

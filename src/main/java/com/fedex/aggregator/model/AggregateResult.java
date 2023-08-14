@@ -1,16 +1,14 @@
 package com.fedex.aggregator.model;
 
 import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.ToString;
+import lombok.Getter;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-@Data
-@ToString
 @AllArgsConstructor(staticName = "create")
+@Getter
 public class AggregateResult {
 
     private Map<String, Optional<Double>> pricing;

@@ -20,12 +20,11 @@ public class AggregationController {
     @Autowired
     private AggregationService aggregationService;
 
-
     @GetMapping
-    Mono<ResponseEntity<AggregateResult>> aggregate(@RequestParam Optional<List<String>> pricingParams,
-                                                    @RequestParam Optional<List<String>> trackParams,
-                                                    @RequestParam Optional<List<String>> shipmentsParams) {
-        return aggregationService.aggregate(pricingParams, trackParams, shipmentsParams)
+    Mono<ResponseEntity<AggregateResult>> aggregate(@RequestParam Optional<List<String>> pricing,
+                                                    @RequestParam Optional<List<String>> track,
+                                                    @RequestParam Optional<List<String>> shipments) {
+        return aggregationService.aggregate(pricing, track, shipments)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }

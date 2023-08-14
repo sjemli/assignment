@@ -9,5 +9,4 @@ class AggregatorApplicationTests {
 	@Test
 	void contextLoads() {
 	}
-
 }
